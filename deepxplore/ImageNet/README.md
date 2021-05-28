@@ -1,4 +1,4 @@
-## DeepXplore  
+## DeepXplore - ImageNet  
 
 Several Modifications
 - Replace ResNet50 with Xception due to a type issue
