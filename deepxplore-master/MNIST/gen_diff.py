@@ -29,15 +29,20 @@ parser.add_argument('step', help="step size of gradient descent", type=float)
 parser.add_argument('seeds', help="number of seeds of input", type=int)
 parser.add_argument('grad_iterations', help="number of iterations of gradient descent", type=int)
 parser.add_argument('threshold', help="threshold for determining neuron activated", type=float)
-parser.add_argument('k', help="Number of sections in multisection coverage", type=int)
+parser.add_argument('k', help="number of sections in multisection coverage", type=int)
 parser.add_argument('-t', '--target_model', help="target model that we want it predicts differently",
                     choices=[0, 1, 2], default=0, type=int)
 parser.add_argument('-sp', '--start_point', help="occlusion upper left corner coordinate", default=(0, 0), type=tuple)
 parser.add_argument('-occl_size', '--occlusion_size', help="occlusion size", default=(10, 10), type=tuple)
-parser.add_argument('--param', type=str, default=None)
+parser.add_argument('--param', type=str, default=None, choices=["multi", "strong", "boundary"], help="type of neuron coverage, classical one if none")
 
 args = parser.parse_args()
 
+print(f"""Transformation : {args.transformation}
+weight_diff/nc : {args.weight_diff}/{args.weight_nc}
+gradient : {args.grad_iterations} steps with {args.step} lr
+seeds : {args.seeds}
+param : {args.param}, {args.k} sections, threshold {args.threshold}""")
 # input image dimensions
 img_rows, img_cols = 28, 28
 # the data, shuffled and split between train and test sets
@@ -65,17 +70,22 @@ model3 = Model3(input_tensor=input_tensor)
 model_layer_dict1, model_layer_dict2, model_layer_dict3 = init_coverage_tables(model1, model2, model3)
 
 # start training input
-for i, x in enumerate(x_train):
-    x = np.expand_dims(x, axis=0)
-    store_minmax(x, model1, model_layer_dict1)
-    store_minmax(x, model2, model_layer_dict2)
-    store_minmax(x, model3, model_layer_dict3)
-    if (i + 1) % 100 == 0:
-        print("{}-th iteration ended".format(i + 1))
-        break
+# split into batch 
+batch_size = 100
+batch_num = (len(x_train) // batch_size) + 1
+for i in range(batch_num):
+    x = x_train[(i * batch_size):((i+1) * batch_size), ...]
+    if len(x) != 0:
+        store_minmax(x, model1, model_layer_dict1)
+        store_minmax(x, model2, model_layer_dict2)
+        store_minmax(x, model3, model_layer_dict3)
+        if (i + 1) % 10 == 0:
+            print("{}-th iteration ended".format((i + 1) * 100))
+            break
 
 # ==============================================================================================
 # start gen inputs
+result_list = []
 for _ in range(args.seeds):
     gen_img = np.expand_dims(random.choice(x_test), axis=0)
     orig_img = gen_img.copy()
@@ -84,23 +94,19 @@ for _ in range(args.seeds):
         model3.predict(gen_img)[0])
 
     if not label1 == label2 == label3:
-        print(bcolors.OKGREEN + 'input already causes different outputs: {}, {}, {}'.format(label1, label2,
-                                                                                            label3) + bcolors.ENDC)
+        print('input already causes different outputs: {}, {}, {}'.format(label1, label2, label3))
 
         update_coverage(gen_img, model1, model_layer_dict1, args.threshold, args.k)
         update_coverage(gen_img, model2, model_layer_dict2, args.threshold, args.k)
         update_coverage(gen_img, model3, model_layer_dict3, args.threshold, args.k)
 
-        print(bcolors.OKGREEN + 'covered neurons percentage %d neurons %.3f, %d neurons %.3f, %d neurons %.3f'
-              % (len(model_layer_dict1), neuron_covered(model_layer_dict1, args.param)[2], len(model_layer_dict2),
-                 neuron_covered(model_layer_dict2, args.param)[2], len(model_layer_dict3),
-                 neuron_covered(model_layer_dict3, args.param)[2]) + bcolors.ENDC)
-        averaged_nc = (neuron_covered(model_layer_dict1, args.param)[0] + neuron_covered(model_layer_dict2, args.param)[0] +
-                       neuron_covered(model_layer_dict3, args.param)[0]) / float(
-            neuron_covered(model_layer_dict1, args.param)[1] + neuron_covered(model_layer_dict2, args.param)[1] +
-            neuron_covered(model_layer_dict3, args.param)[
-                1])
-        print(bcolors.OKGREEN + 'averaged covered neurons %.3f' % averaged_nc + bcolors.ENDC)
+        cover1 = neuron_covered(model_layer_dict1, args.param)
+        cover2 = neuron_covered(model_layer_dict2, args.param)
+        cover3 = neuron_covered(model_layer_dict3, args.param)
+        print('covered neurons percentage %d neurons %.3f, %d neurons %.3f, %d neurons %.3f'
+                  % (cover1[0], cover1[2], cover2[0], cover2[2], cover3[0], cover3[2]))
+        averaged_nc = (cover1[0] + cover2[0] + cover3[0]) / float(cover1[1] + cover2[1] +cover3[1])
+        print('averaged covered neurons %.3f' % averaged_nc)
 
         gen_img_deprocessed = deprocess_image(gen_img)
 
@@ -155,29 +161,36 @@ for _ in range(args.seeds):
             grads_value = constraint_black(grads_value)  # constraint the gradients value
 
         gen_img += grads_value * args.step
-        predictions1 = np.argmax(model1.predict(gen_img)[0])
-        predictions2 = np.argmax(model2.predict(gen_img)[0])
-        predictions3 = np.argmax(model3.predict(gen_img)[0])
+        predict1 = model1.predict(gen_img)[0]
+        predict2 = model2.predict(gen_img)[0]
+        predict3 = model3.predict(gen_img)[0]
+        predictions1 = np.argmax(predict1)
+        predictions2 = np.argmax(predict2)
+        predictions3 = np.argmax(predict3)
+        sureness1 = np.max(predict1)
+        sureness2 = np.max(predict2)
+        sureness3 = np.max(predict3)
 
         if not predictions1 == predictions2 == predictions3:
             update_coverage(gen_img, model1, model_layer_dict1, args.threshold)
             update_coverage(gen_img, model2, model_layer_dict2, args.threshold)
             update_coverage(gen_img, model3, model_layer_dict3, args.threshold)
 
-            print(bcolors.OKGREEN + 'covered neurons percentage %d neurons %.3f, %d neurons %.3f, %d neurons %.3f'
-                  % (len(model_layer_dict1), neuron_covered(model_layer_dict1, args.param)[2], len(model_layer_dict2),
-                     neuron_covered(model_layer_dict2, args.param)[2], len(model_layer_dict3),
-                     neuron_covered(model_layer_dict3, args.param)[2]) + bcolors.ENDC)
-            averaged_nc = (neuron_covered(model_layer_dict1, args.param)[0] + neuron_covered(model_layer_dict2, args.param)[0] +
-                           neuron_covered(model_layer_dict3, args.param)[0]) / float(
-                neuron_covered(model_layer_dict1, args.param)[1] + neuron_covered(model_layer_dict2, args.param)[1] +
-                neuron_covered(model_layer_dict3, args.param)[
-                    1])
-            print(bcolors.OKGREEN + 'averaged covered neurons %.3f' % averaged_nc + bcolors.ENDC)
+            
+            cover1 = neuron_covered(model_layer_dict1, args.param)
+            cover2 = neuron_covered(model_layer_dict2, args.param)
+            cover3 = neuron_covered(model_layer_dict3, args.param)
+            print('covered neurons percentage %d neurons %.3f, %d neurons %.3f, %d neurons %.3f'
+                  % (cover1[0], cover1[2], cover2[0], cover2[2], cover3[0], cover3[2]))
+            averaged_nc = (cover1[0] + cover2[0] + cover3[0]) / float(cover1[1] + cover2[1] +cover3[1])
+            print('averaged covered neurons %.3f' % averaged_nc)
 
             gen_img_deprocessed = deprocess_image(gen_img)
             orig_img_deprocessed = deprocess_image(orig_img)
 
+            l1_distance = abs(orig_img_deprocessed - gen_img_deprocessed).sum()
+            result_list.append((predictions1, predictions2, predictions3, sureness1, sureness2, sureness3,
+                               iters, l1_distance))
             # save the result to disk
             imwrite('./generated_inputs/' + args.transformation + '_' + str(predictions1) + '_' + str(
                 predictions2) + '_' + str(predictions3) + '.png',
@@ -186,3 +199,9 @@ for _ in range(args.seeds):
                 predictions2) + '_' + str(predictions3) + '_orig.png',
                    orig_img_deprocessed)
             break
+
+print(result_list)
+with open("./summary_" + args.param + "_" + args.transformation + ".csv", 'w') as summary_file:
+    summary_file.write("Prediction 1,Prediction 2,Prediction 3,Sureness 1,Sureness 2,Sureness 3,Iter Num,L1 Distance\n")
+    for item in result_list:
+        summary_file.write(f"{item[0]},{item[1]},{item[2]},{item[3]},{item[4]},{item[5]},{item[6]},{item[7]}\n")

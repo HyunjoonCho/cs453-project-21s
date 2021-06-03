@@ -71,7 +71,7 @@ def init_dict(model, model_layer_dict, k=5):
 def neuron_to_cover(model_layer_dict, param = None):
     if param is None:
         not_covered = [k for k, v in model_layer_dict.items() if len(k) == 2 and not v]
-    elif param is 'multi':
+    elif param == 'multi':
         not_covered = [(k[0], k[1]) for k, v in model_layer_dict.items() if len(k) == 3 and isinstance(k[2], int) and not v]
     else:
         not_covered = [(k[0], k[1]) for k, v in model_layer_dict.items() if param in k and not v]
@@ -80,7 +80,6 @@ def neuron_to_cover(model_layer_dict, param = None):
     else:
         layer_name, index = random.choice(model_layer_dict.keys())
     return layer_name, index
-
 
 def neuron_covered(model_layer_dict, param=None):
     if param is None:
@@ -101,15 +100,17 @@ def store_minmax(input_data, model, model_layer_dict):
     intermediate_layer_model = Model(inputs=model.input,
                                      outputs=[model.get_layer(layer_name).output for layer_name in layer_names])
     intermediate_layer_outputs = intermediate_layer_model.predict(input_data)
-    
     for i, intermediate_layer_output in enumerate(intermediate_layer_outputs):
-        scaled = scale(intermediate_layer_output[0])
-        for num_neuron in range(scaled.shape[-1]):
-            curr = np.mean(scaled[..., num_neuron])
+        curr = intermediate_layer_output
+        for num_neuron in range(curr.shape[-1]):
+            axis = curr.shape[1:-1]
+            neuron_val = np.mean(curr[..., num_neuron], axis=axis)
+            neuron_max = np.max(neuron_val)
+            neuron_min = np.min(neuron_val)
             bef_max = model_layer_dict.get((layer_names[i], num_neuron, "max"), np.NINF)
             bef_min = model_layer_dict.get((layer_names[i], num_neuron, "min"), np.PINF)
-            new_max = max(bef_max, curr)
-            new_min = min(bef_min, curr)
+            new_max = max(bef_max, neuron_val)
+            new_min = min(bef_min, neuron_val)
             model_layer_dict[(layer_names[i], num_neuron, "max")] = new_max
             model_layer_dict[(layer_names[i], num_neuron, "min")] = new_min
 
@@ -123,20 +124,22 @@ def update_coverage(input_data, model, model_layer_dict, threshold=0, k=5):
     intermediate_layer_outputs = intermediate_layer_model.predict(input_data)
 
     for i, intermediate_layer_output in enumerate(intermediate_layer_outputs):
-        scaled = scale(intermediate_layer_output[0])
-        for num_neuron in range(scaled.shape[-1]):
-            curr = np.mean(scaled[..., num_neuron])
+        curr = intermediate_layer_output[0]
+        scaled = scale(curr)
+        for num_neuron in range(curr.shape[-1]):
+            curr_neuron = np.mean(curr[..., num_neuron])
+            scaled_curr = np.mean(scaled[..., num_neuron])
             max_thres = model_layer_dict[(layer_names[i], num_neuron, "max")]
             min_thres = model_layer_dict[(layer_names[i], num_neuron, "min")]
-            if curr > threshold and not model_layer_dict[(layer_names[i], num_neuron)]:
+            if scaled_curr > threshold and not model_layer_dict[(layer_names[i], num_neuron)]:
                 model_layer_dict[(layer_names[i], num_neuron)] = True
-            if curr > max_thres and not model_layer_dict[(layer_names[i], num_neuron, "strong")]:
+            if curr_neuron > max_thres and not model_layer_dict[(layer_names[i], num_neuron, "strong")]:
                 model_layer_dict[(layer_names[i], num_neuron, "strong")] = True
-            if (curr > max_thres or curr < min_thres) and not model_layer_dict[(layer_names[i], num_neuron, "boundary")]:
+            if (curr_neuron > max_thres or curr_neuron < min_thres) and not model_layer_dict[(layer_names[i], num_neuron, "boundary")]:
                 model_layer_dict[(layer_names[i], num_neuron, "boundary")] = True
             section_length = (max_thres - min_thres) / k
             for i in range(k):
-                if min_thres + section_length * i <= curr <= min_thres + section_length * (i + 1):
+                if min_thres + section_length * i <= curr_neuron <= min_thres + section_length * (i + 1):
                     model_layer_dict[(layer_names[i], num_neuron, k)] = True
             break
             
