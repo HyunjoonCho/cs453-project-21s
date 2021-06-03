@@ -201,7 +201,7 @@ for _ in range(args.seeds):
                    orig_img_deprocessed)
             break
 
-hash = hex(abs(hash(frozenset(vars(args).items()))))[0:8]
+hash = hex(abs(hash(frozenset(vars(args).items()))))[2:10]
 
 with open("./summary_" + args.param + "_" + args.transformation + "_" + hash + ".csv", 'w') as summary_file:
     summary_file.write("Prediction 1,Prediction 2,Prediction 3,Sureness 1,Sureness 2,Sureness 3,Iter Num,L1 Distance\n")
