@@ -6,6 +6,7 @@ from __future__ import print_function
 
 import argparse
 
+from tensorflow import compat
 from tensorflow.keras.datasets import mnist
 from tensorflow.keras.layers import Input
 from imageio import imwrite
@@ -17,6 +18,7 @@ from Model3 import Model3
 from configs import bcolors
 from utils import *
 
+compat.v1.disable_eager_execution()
 # read the parameter
 # argument parsing
 parser = argparse.ArgumentParser(description='Main function for difference-inducing input generation in MNIST dataset')
@@ -68,8 +70,9 @@ for i, x in enumerate(x_train):
     store_minmax(x, model1, model_layer_dict1)
     store_minmax(x, model2, model_layer_dict2)
     store_minmax(x, model3, model_layer_dict3)
-    if i % 100 == 0:
-        print("{}-th iteratin ended".format(i))
+    if (i + 1) % 100 == 0:
+        print("{}-th iteration ended".format(i + 1))
+        break
 
 # ==============================================================================================
 # start gen inputs
@@ -93,7 +96,7 @@ for _ in range(args.seeds):
                  neuron_covered(model_layer_dict2, args.param)[2], len(model_layer_dict3),
                  neuron_covered(model_layer_dict3, args.param)[2]) + bcolors.ENDC)
         averaged_nc = (neuron_covered(model_layer_dict1, args.param)[0] + neuron_covered(model_layer_dict2, args.param)[0] +
-                       neuron_covered(model_layer_dict3)[0], args.param) / float(
+                       neuron_covered(model_layer_dict3, args.param)[0]) / float(
             neuron_covered(model_layer_dict1, args.param)[1] + neuron_covered(model_layer_dict2, args.param)[1] +
             neuron_covered(model_layer_dict3, args.param)[
                 1])
