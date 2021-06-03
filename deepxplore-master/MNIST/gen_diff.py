@@ -81,7 +81,6 @@ for i in range(batch_num):
         store_minmax(x, model3, model_layer_dict3)
         if (i + 1) % 10 == 0:
             print("{}-th iteration ended".format((i + 1) * 100))
-            break
 
 # ==============================================================================================
 # start gen inputs
