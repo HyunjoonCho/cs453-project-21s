@@ -103,14 +103,14 @@ def store_minmax(input_data, model, model_layer_dict):
     for i, intermediate_layer_output in enumerate(intermediate_layer_outputs):
         curr = intermediate_layer_output
         for num_neuron in range(curr.shape[-1]):
-            axis = curr.shape[1:-1]
+            axis = tuple(range(1, len(curr.shape)-1))
             neuron_val = np.mean(curr[..., num_neuron], axis=axis)
             neuron_max = np.max(neuron_val)
             neuron_min = np.min(neuron_val)
             bef_max = model_layer_dict.get((layer_names[i], num_neuron, "max"), np.NINF)
             bef_min = model_layer_dict.get((layer_names[i], num_neuron, "min"), np.PINF)
-            new_max = max(bef_max, neuron_val)
-            new_min = min(bef_min, neuron_val)
+            new_max = max(bef_max, neuron_max)
+            new_min = min(bef_min, neuron_min)
             model_layer_dict[(layer_names[i], num_neuron, "max")] = new_max
             model_layer_dict[(layer_names[i], num_neuron, "min")] = new_min
 
