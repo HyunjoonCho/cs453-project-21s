@@ -12,6 +12,8 @@ from keras.applications.vgg19 import VGG19
 from keras.layers import Input
 from imageio import imwrite
 from json import dump
+import _pickle as pickle
+import os
 
 from configs import bcolors
 from utils import *
@@ -49,19 +51,39 @@ model1 = VGG16(input_tensor=input_tensor)
 model2 = VGG19(input_tensor=input_tensor)
 model3 = Xception(input_tensor=input_tensor)
 # init coverage table
-model_layer_dict1, model_layer_dict2, model_layer_dict3 = init_coverage_tables(model1, model2, model3, args.k)
 
-img_paths = image.list_pictures('./seeds/', ext='jpeg')
-minmax_seeds = 10
+img_paths = sorted(image.list_pictures('./seeds/', ext='jpeg'))
+minmax_seeds = 1000
 minmax_set = img_paths[:minmax_seeds]
 gen_set = img_paths[minmax_seeds:]
 
-for i in range(len(minmax_set)):
-    x = preprocess_image(minmax_set[i])
-    store_minmax(x, model1, model_layer_dict1)
-    store_minmax(x, model2, model_layer_dict2)
-    store_minmax(x, model3, model_layer_dict3)
-    print("{} iteration ended".format(i + 1))
+files = os.listdir('./minmaxdict/')
+if len(files) != 3:
+    model_layer_dict1, model_layer_dict2, model_layer_dict3 = init_coverage_tables(model1, model2, model3, args.k)
+    print('Start min-max iteration')
+    for i in range(len(minmax_set)):
+        x = preprocess_image(minmax_set[i])
+        store_minmax(x, model1, model_layer_dict1)
+        store_minmax(x, model2, model_layer_dict2)
+        store_minmax(x, model3, model_layer_dict3)
+        if (i + 1) % 10 == 0:
+            print("{}-th iteration ended".format(i + 1))
+    with open('./minmaxdict/dict1.txt', 'wb') as file:
+        pickle.dump(model_layer_dict1, file)
+    with open('./minmaxdict/dict2.txt', 'wb') as file:
+        pickle.dump(model_layer_dict2, file)
+    with open('./minmaxdict/dict3.txt', 'wb') as file:
+        pickle.dump(model_layer_dict3, file)
+    print('Saved initial min-max dictionary')
+
+else:
+    with open('./minmaxdict/dict1.txt', 'rb') as file:
+        model_layer_dict1 = pickle.load(file)
+    with open('./minmaxdict/dict2.txt', 'rb') as file:
+        model_layer_dict2 = pickle.load(file)
+    with open('./minmaxdict/dict3.txt', 'rb') as file:
+        model_layer_dict3 = pickle.load(file)
+    print('Loaded initial min-max dictionary')
 
 # ==============================================================================================
 # start gen inputs
@@ -72,12 +94,26 @@ for _ in range(args.seeds):
     # first check if input already induces differences
     pred1, pred2, pred3 = model1.predict(gen_img), model2.predict(gen_img), model3.predict(gen_img)
     label1, label2, label3 = np.argmax(pred1[0]), np.argmax(pred2[0]), np.argmax(pred3[0])
+    sure1, sure2, sure3 = np.max(pred1[0]), np.max(pred2[0]), np.max(pred3[0])
     if not label1 == label2 == label3:
         print(bcolors.OKGREEN + 'input already causes different outputs: {}, {}, {}'.format(decode_label(pred1),
                                                                                             decode_label(pred2),
                                                                                             decode_label(
                                                                                                 pred3)) + bcolors.ENDC)
 
+        print ('with sureness', sure1, sure2, sure3)
+# input already causes different outputs: walking_stick, junco, ping-pong_ball
+# with sureness 0.17079657 0.10193145 0.9790967
+# covered neurons percentage 7 neurons 0.000, 8 neurons 0.000, 79 neurons 0.001
+# averaged covered neurons 0.001
+# input already causes different outputs: fire_engine, trailer_truck, necklace
+# with sureness 0.16768934 0.08415203 0.7195859
+# covered neurons percentage 14 neurons 0.001, 15 neurons 0.001, 91 neurons 0.001
+# averaged covered neurons 0.001
+# input already causes different outputs: box_turtle, box_turtle, sunscreen
+# with sureness 0.8856209 0.9065037 0.9979247
+# covered neurons percentage 16 neurons 0.001, 17 neurons 0.001, 110 neurons 0.001
+# averaged covered neurons 0.001
         update_coverage(gen_img, model1, model_layer_dict1, args.threshold, args.k)
         update_coverage(gen_img, model2, model_layer_dict2, args.threshold, args.k)
         update_coverage(gen_img, model3, model_layer_dict3, args.threshold, args.k)
@@ -85,6 +121,15 @@ for _ in range(args.seeds):
         cover1 = neuron_covered(model_layer_dict1, args.param)
         cover2 = neuron_covered(model_layer_dict2, args.param)
         cover3 = neuron_covered(model_layer_dict3, args.param)
+
+# Boundary Coverage
+# input already causes different outputs: wok, wok, ping-pong_ball
+# covered  7 total neurons  14888
+# covered  12 total neurons  16168
+# covered  60 total neurons  91776
+# covered neurons percentage 7 neurons 0.000, 12 neurons 0.001, 60 neurons 0.001
+# averaged covered neurons 0.001
+
         print('covered neurons percentage %d neurons %.3f, %d neurons %.3f, %d neurons %.3f'
                   % (cover1[0], cover1[2], cover2[0], cover2[2], cover3[0], cover3[2]))
         averaged_nc = (cover1[0] + cover2[0] + cover3[0]) / float(cover1[1] + cover2[1] +cover3[1])
@@ -169,11 +214,9 @@ for _ in range(args.seeds):
             gen_img_deprocessed = deprocess_image(gen_img)
             orig_img_deprocessed = deprocess_image(orig_img)
 
-            l1_distance = abs(orig_img_deprocessed - gen_img_deprocessed).sum()
             l2_distance = np.linalg.norm(orig_img_deprocessed - gen_img_deprocessed)
             result_list.append((decode_label(predictions1), decode_label(predictions2), decode_label(predictions3), 
                                 sureness1, sureness2, sureness3, iters, l2_distance))
-            print('L1 distance to original image %d' % l1_distance)
             print('L2 distance to original image %d' % l2_distance)
             # save the result to disk
             imwrite('./generated_inputs/' + args.transformation + '_' + decode_label(predictions1) + '_' + decode_label(
@@ -187,7 +230,7 @@ for _ in range(args.seeds):
 hash = hex(abs(hash(frozenset(vars(args).items()))))[2:10]
 
 with open("./results/summary_" + args.param + "_" + args.transformation + "_" + hash + ".csv", 'w') as summary_file:
-    summary_file.write("Prediction 1,Prediction 2,Prediction 3,Sureness 1,Sureness 2,Sureness 3,Iter Num,L1 Distance\n")
+    summary_file.write("Prediction 1,Prediction 2,Prediction 3,Sureness 1,Sureness 2,Sureness 3,Iter Num,L2 Distance\n")
     for item in result_list:
         summary_file.write(f"{item[0]},{item[1]},{item[2]},{item[3]},{item[4]},{item[5]},{item[6]},{item[7]}\n")
 
