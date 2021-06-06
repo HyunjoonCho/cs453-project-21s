@@ -6,10 +6,13 @@ from __future__ import print_function
 
 import argparse
 
-from keras.applications.xception import Xception
-from keras.applications.vgg16 import VGG16
-from keras.applications.vgg19 import VGG19
-from keras.layers import Input
+import tensorflow as tf
+from tensorflow.keras.applications.vgg16 import VGG16
+from tensorflow.keras.applications.vgg19 import VGG19
+from tensorflow.keras.applications.resnet50 import ResNet50
+from tensorflow.keras.layers import Input
+from keras_preprocessing.image import list_pictures
+
 from imageio import imwrite
 from json import dump
 import _pickle as pickle
@@ -20,6 +23,8 @@ from utils import *
 
 # read the parameter
 # argument parsing
+tf.compat.v1.disable_eager_execution() # L166 - K.gradients cannot be called in eager exec mode
+
 parser = argparse.ArgumentParser(
     description='Main function for difference-inducing input generation in ImageNet dataset')
 parser.add_argument('transformation', help="realistic transformation type", choices=['light', 'occl', 'blackout'])
@@ -49,10 +54,10 @@ input_tensor = Input(shape=input_shape)
 K.set_learning_phase(0)
 model1 = VGG16(input_tensor=input_tensor)
 model2 = VGG19(input_tensor=input_tensor)
-model3 = Xception(input_tensor=input_tensor)
-# init coverage table
+model3 = ResNet50(input_tensor=input_tensor)
 
-img_paths = sorted(image.list_pictures('./seeds/', ext='jpeg'))
+# init coverage table
+img_paths = sorted(list_pictures('./seeds/', ext='jpeg'))
 minmax_seeds = 1000
 minmax_set = img_paths[:minmax_seeds]
 gen_set = img_paths[minmax_seeds:]
@@ -102,18 +107,6 @@ for _ in range(args.seeds):
                                                                                                 pred3)) + bcolors.ENDC)
 
         print ('with sureness', sure1, sure2, sure3)
-# input already causes different outputs: walking_stick, junco, ping-pong_ball
-# with sureness 0.17079657 0.10193145 0.9790967
-# covered neurons percentage 7 neurons 0.000, 8 neurons 0.000, 79 neurons 0.001
-# averaged covered neurons 0.001
-# input already causes different outputs: fire_engine, trailer_truck, necklace
-# with sureness 0.16768934 0.08415203 0.7195859
-# covered neurons percentage 14 neurons 0.001, 15 neurons 0.001, 91 neurons 0.001
-# averaged covered neurons 0.001
-# input already causes different outputs: box_turtle, box_turtle, sunscreen
-# with sureness 0.8856209 0.9065037 0.9979247
-# covered neurons percentage 16 neurons 0.001, 17 neurons 0.001, 110 neurons 0.001
-# averaged covered neurons 0.001
         update_coverage(gen_img, model1, model_layer_dict1, args.threshold, args.k)
         update_coverage(gen_img, model2, model_layer_dict2, args.threshold, args.k)
         update_coverage(gen_img, model3, model_layer_dict3, args.threshold, args.k)
@@ -121,14 +114,6 @@ for _ in range(args.seeds):
         cover1 = neuron_covered(model_layer_dict1, args.param)
         cover2 = neuron_covered(model_layer_dict2, args.param)
         cover3 = neuron_covered(model_layer_dict3, args.param)
-
-# Boundary Coverage
-# input already causes different outputs: wok, wok, ping-pong_ball
-# covered  7 total neurons  14888
-# covered  12 total neurons  16168
-# covered  60 total neurons  91776
-# covered neurons percentage 7 neurons 0.000, 12 neurons 0.001, 60 neurons 0.001
-# averaged covered neurons 0.001
 
         print('covered neurons percentage %d neurons %.3f, %d neurons %.3f, %d neurons %.3f'
                   % (cover1[0], cover1[2], cover2[0], cover2[2], cover3[0], cover3[2]))
@@ -152,15 +137,15 @@ for _ in range(args.seeds):
     if args.target_model == 0:
         loss1 = -args.weight_diff * K.mean(model1.get_layer('predictions').output[..., orig_label])
         loss2 = K.mean(model2.get_layer('predictions').output[..., orig_label])
-        loss3 = K.mean(model3.get_layer('fc1000').output[..., orig_label])
+        loss3 = K.mean(model3.get_layer('predictions').output[..., orig_label])
     elif args.target_model == 1:
         loss1 = K.mean(model1.get_layer('predictions').output[..., orig_label])
         loss2 = -args.weight_diff * K.mean(model2.get_layer('predictions').output[..., orig_label])
-        loss3 = K.mean(model3.get_layer('fc1000').output[..., orig_label])
+        loss3 = K.mean(model3.get_layer('predictions').output[..., orig_label])
     elif args.target_model == 2:
         loss1 = K.mean(model1.get_layer('predictions').output[..., label1])
         loss2 = K.mean(model2.get_layer('predictions').output[..., orig_label])
-        loss3 = -args.weight_diff * K.mean(model3.get_layer('fc1000').output[..., orig_label])
+        loss3 = -args.weight_diff * K.mean(model3.get_layer('predictions').output[..., orig_label])
     loss1_neuron = K.mean(model1.get_layer(layer_name1).output[..., index1])
     loss2_neuron = K.mean(model2.get_layer(layer_name2).output[..., index2])
     loss3_neuron = K.mean(model3.get_layer(layer_name3).output[..., index3])
@@ -226,6 +211,8 @@ for _ in range(args.seeds):
                 predictions2) + '_' + decode_label(predictions3) + '_orig.png',
                    orig_img_deprocessed)
             break
+        if iters == args.grad_iterations:
+            print('Failed generation in {} steps'.format(args.grad_iterations))
 
 hash = hex(abs(hash(frozenset(vars(args).items()))))[2:10]
 

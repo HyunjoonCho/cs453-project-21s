@@ -2,10 +2,10 @@ import random
 from collections import defaultdict
 
 import numpy as np
-from keras import backend as K
-from keras.applications.vgg16 import preprocess_input, decode_predictions
-from keras.models import Model
-from keras_preprocessing import image
+from tensorflow.keras import backend as K
+from tensorflow.keras.applications.vgg16 import preprocess_input, decode_predictions
+from tensorflow.keras.models import Model
+from tensorflow.keras.preprocessing import image
 
 
 def preprocess_image(img_path):
