@@ -1,0 +1,1 @@
+{"transformation": "light", "weight_diff": 0.1, "weight_nc": 0.1, "step": 10.0, "seeds": 3, "grad_iterations": 10, "threshold": 0.1, "k": 5, "target_model": 0, "start_point": [0, 0], "occlusion_size": [10, 10], "param": "multi"}
