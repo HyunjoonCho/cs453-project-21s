@@ -17,6 +17,7 @@ from imageio import imwrite
 from json import dump
 import _pickle as pickle
 import os
+import time
 
 from configs import bcolors
 from utils import *
@@ -93,7 +94,8 @@ else:
 # ==============================================================================================
 # start gen inputs
 result_list = []
-for _ in range(args.seeds):
+for n in range(args.seeds):
+    start_time = time.process_time()
     gen_img = preprocess_image(random.choice(gen_set))
     orig_img = gen_img.copy()
     # first check if input already induces differences
@@ -127,6 +129,7 @@ for _ in range(args.seeds):
             pred2) + '_' + decode_label(pred3) + '.png', gen_img_deprocessed)
         continue
 
+    print('{}-th seed start gradient ascent'.format(n + 1))
     # if all label agrees
     orig_label = label1
     layer_name1, index1 = neuron_to_cover(model_layer_dict1, args.param)
@@ -150,6 +153,7 @@ for _ in range(args.seeds):
     loss2_neuron = K.mean(model2.get_layer(layer_name2).output[..., index2])
     loss3_neuron = K.mean(model3.get_layer(layer_name3).output[..., index3])
     layer_output = (loss1 + loss2 + loss3) + args.weight_nc * (loss1_neuron + loss2_neuron + loss3_neuron)
+    # coverage tends to be low, thus use bigger args.weight_diff
 
     # for adversarial image generation
     final_loss = K.mean(layer_output)
@@ -169,21 +173,22 @@ for _ in range(args.seeds):
         elif args.transformation == 'occl':
             grads_value = constraint_occl(grads_value, args.start_point,
                                           args.occlusion_size)  # constraint the gradients value
-        elif args.transformation == 'blackout':
+        elif args.transformation == 'blackout': # falls into all-zero gradient! can also find on original repo
             grads_value = constraint_black(grads_value)  # constraint the gradients value
 
         gen_img += grads_value * args.step
-        predict1 = model1.predict(gen_img)[0]
-        predict2 = model2.predict(gen_img)[0]
-        predict3 = model3.predict(gen_img)[0]
-        predictions1 = np.argmax(predict1)
-        predictions2 = np.argmax(predict2)
-        predictions3 = np.argmax(predict3)
-        sureness1 = np.max(predict1)
-        sureness2 = np.max(predict2)
-        sureness3 = np.max(predict3)
+        predict1 = model1.predict(gen_img)
+        predict2 = model2.predict(gen_img)
+        predict3 = model3.predict(gen_img)
+        predictions1 = np.argmax(predict1[0])
+        predictions2 = np.argmax(predict2[0])
+        predictions3 = np.argmax(predict3[0])
+        sureness1 = np.max(predict1[0])
+        sureness2 = np.max(predict2[0])
+        sureness3 = np.max(predict3[0])
 
         if not predictions1 == predictions2 == predictions3:
+            gen_time = time.process_time() - start_time
             update_coverage(gen_img, model1, model_layer_dict1, args.threshold, args.k)
             update_coverage(gen_img, model2, model_layer_dict2, args.threshold, args.k)
             update_coverage(gen_img, model3, model_layer_dict3, args.threshold, args.k)
@@ -200,26 +205,28 @@ for _ in range(args.seeds):
             orig_img_deprocessed = deprocess_image(orig_img)
 
             l2_distance = np.linalg.norm(orig_img_deprocessed - gen_img_deprocessed)
-            result_list.append((decode_label(predictions1), decode_label(predictions2), decode_label(predictions3), 
-                                sureness1, sureness2, sureness3, iters, l2_distance))
+            result_list.append((decode_label(predict1), decode_label(predict2), decode_label(predict3), 
+                                sureness1, sureness2, sureness3, iters, l2_distance, gen_time))
             print('L2 distance to original image %d' % l2_distance)
             # save the result to disk
-            imwrite('./generated_inputs/' + args.transformation + '_' + decode_label(predictions1) + '_' + decode_label(
-                predictions2) + '_' + decode_label(predictions3) + '.png',
+            imwrite('./generated_inputs/' + args.transformation + '_' + decode_label(predict1) + '_' + decode_label(
+                predict2) + '_' + decode_label(predict3) + '.png',
                    gen_img_deprocessed)
-            imwrite('./generated_inputs/' + args.transformation + '_' + decode_label(predictions1) + '_' + decode_label(
-                predictions2) + '_' + decode_label(predictions3) + '_orig.png',
+            imwrite('./generated_inputs/' + args.transformation + '_' + decode_label(predict1) + '_' + decode_label(
+                predict2) + '_' + decode_label(predict3) + '_orig.png',
                    orig_img_deprocessed)
             break
-        if iters == args.grad_iterations:
-            print('Failed generation in {} steps'.format(args.grad_iterations))
+        if iters == args.grad_iterations - 1:
+            print('Failed generating image with different output')
 
 hash = hex(abs(hash(frozenset(vars(args).items()))))[2:10]
+if args.param is None:
+    args.param = 'basic'
 
 with open("./results/summary_" + args.param + "_" + args.transformation + "_" + hash + ".csv", 'w') as summary_file:
-    summary_file.write("Prediction 1,Prediction 2,Prediction 3,Sureness 1,Sureness 2,Sureness 3,Iter Num,L2 Distance\n")
+    summary_file.write("Prediction 1,Prediction 2,Prediction 3,Sureness 1,Sureness 2,Sureness 3,Iter Num,L2 Distance,Generation Time\n")
     for item in result_list:
-        summary_file.write(f"{item[0]},{item[1]},{item[2]},{item[3]},{item[4]},{item[5]},{item[6]},{item[7]}\n")
+        summary_file.write(f"{item[0]},{item[1]},{item[2]},{item[3]},{item[4]},{item[5]},{item[6]},{item[7]},{item[8]}\n")
 
 with open("./results/config_" + args.param + "_" + args.transformation + "_" + hash + ".json", 'w') as config_file:
     dump(vars(args), config_file)
