@@ -43,17 +43,17 @@ def constraint_black(gradients, rect_shape=(6, 6)):
     return new_grads
 
 
-def init_coverage_tables(model1, model2, model3):
+def init_coverage_tables(model1, model2, model3, k=5):
     model_layer_dict1 = defaultdict(bool)
     model_layer_dict2 = defaultdict(bool)
     model_layer_dict3 = defaultdict(bool)
-    init_dict(model1, model_layer_dict1)
-    init_dict(model2, model_layer_dict2)
-    init_dict(model3, model_layer_dict3)
+    init_dict(model1, model_layer_dict1, k)
+    init_dict(model2, model_layer_dict2, k)
+    init_dict(model3, model_layer_dict3, k)
     return model_layer_dict1, model_layer_dict2, model_layer_dict3
 
 
-def init_dict(model, model_layer_dict, k=5):
+def init_dict(model, model_layer_dict, k):
     for layer in model.layers:
         if 'flatten' in layer.name or 'input' in layer.name:
             continue

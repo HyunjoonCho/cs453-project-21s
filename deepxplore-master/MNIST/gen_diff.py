@@ -68,7 +68,7 @@ model2 = Model2(input_tensor=input_tensor)
 model3 = Model3(input_tensor=input_tensor)
 
 # init coverage table
-model_layer_dict1, model_layer_dict2, model_layer_dict3 = init_coverage_tables(model1, model2, model3)
+model_layer_dict1, model_layer_dict2, model_layer_dict3 = init_coverage_tables(model1, model2, model3, args.k)
 
 # start training input
 # split into batch 
@@ -172,9 +172,9 @@ for _ in range(args.seeds):
         sureness3 = np.max(predict3)
 
         if not predictions1 == predictions2 == predictions3:
-            update_coverage(gen_img, model1, model_layer_dict1, args.threshold)
-            update_coverage(gen_img, model2, model_layer_dict2, args.threshold)
-            update_coverage(gen_img, model3, model_layer_dict3, args.threshold)
+            update_coverage(gen_img, model1, model_layer_dict1, args.threshold, args.k)
+            update_coverage(gen_img, model2, model_layer_dict2, args.threshold, args.k)
+            update_coverage(gen_img, model3, model_layer_dict3, args.threshold, args.k)
 
             
             cover1 = neuron_covered(model_layer_dict1, args.param)
@@ -188,10 +188,10 @@ for _ in range(args.seeds):
             gen_img_deprocessed = deprocess_image(gen_img)
             orig_img_deprocessed = deprocess_image(orig_img)
 
-            l1_distance = abs(orig_img_deprocessed - gen_img_deprocessed).sum()
+            l2_distance = np.linalg.norm(orig_img_deprocessed - gen_img_deprocessed)
             result_list.append((predictions1, predictions2, predictions3, sureness1, sureness2, sureness3,
-                               iters, l1_distance))
-            print('L1 distance to original image %d' % l1_distance)
+                               iters, l2_distance))
+            print('L2 distance to original image %d' % l2_distance)
             # save the result to disk
             imwrite('./generated_inputs/' + args.transformation + '_' + str(predictions1) + '_' + str(
                 predictions2) + '_' + str(predictions3) + '.png',
@@ -204,7 +204,7 @@ for _ in range(args.seeds):
 hash = hex(abs(hash(frozenset(vars(args).items()))))[2:10]
 
 with open("./summary_" + args.param + "_" + args.transformation + "_" + hash + ".csv", 'w') as summary_file:
-    summary_file.write("Prediction 1,Prediction 2,Prediction 3,Sureness 1,Sureness 2,Sureness 3,Iter Num,L1 Distance\n")
+    summary_file.write("Prediction 1,Prediction 2,Prediction 3,Sureness 1,Sureness 2,Sureness 3,Iter Num,L2 Distance\n")
     for item in result_list:
         summary_file.write(f"{item[0]},{item[1]},{item[2]},{item[3]},{item[4]},{item[5]},{item[6]},{item[7]}\n")
 
