@@ -1,1 +1,0 @@
-{"transformation": "occl", "weight_diff": 1.0, "weight_nc": 0.5, "step": 2.0, "seeds": 10, "grad_iterations": 50, "threshold": 0.2, "k": 5, "target_model": 0, "start_point": [0, 0], "occlusion_size": [50, 50], "param": "strong"}

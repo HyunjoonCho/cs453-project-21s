@@ -32,6 +32,20 @@ def decode_label(pred):
     return decode_predictions(pred)[0][0][1]
 
 
+def retrieve_path(param):
+    cov_type = 0
+    if param is None:
+        cov_type = 1
+    elif param == "multi":
+        cov_type = 2
+    else:
+        cov_type = 3
+    gen_input_path = './generated_inputs/NC' + str(cov_type)
+    result_path = './results/NC' + str(cov_type)
+
+    return gen_input_path, result_path
+
+
 def normalize(x):
     # utility function to normalize a tensor by its L2 norm
     return x / (K.sqrt(K.mean(K.square(x))) + 1e-5)
@@ -164,7 +178,6 @@ def update_coverage(input_data, model, model_layer_dict, threshold=0, k=5):
             for i in range(k):
                 if min_thres + section_length * i <= curr_neuron <= min_thres + section_length * (i + 1):
                     model_layer_dict[(layer_names[i], num_neuron, k)] = True
-            break
 
 def full_coverage(model_layer_dict, param=None):
     if param is None:

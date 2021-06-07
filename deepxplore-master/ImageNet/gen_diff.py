@@ -94,8 +94,10 @@ else:
 # ==============================================================================================
 # start gen inputs
 result_list = []
+gen_input_path, result_path = retrieve_path(args.param)
+
 for n in range(args.seeds):
-    start_time = time.process_time()
+    start_time = time.perf_counter()
     gen_img = preprocess_image(random.choice(gen_set))
     orig_img = gen_img.copy()
     # first check if input already induces differences
@@ -122,11 +124,11 @@ for n in range(args.seeds):
         averaged_nc = (cover1[0] + cover2[0] + cover3[0]) / float(cover1[1] + cover2[1] +cover3[1])
         print('averaged covered neurons %.3f' % averaged_nc)
 
-        gen_img_deprocessed = deprocess_image(gen_img)
+        # gen_img_deprocessed = deprocess_image(gen_img)
 
-        # save the result to disk
-        imwrite('./generated_inputs/' + 'already_differ_' + decode_label(pred1) + '_' + decode_label(
-            pred2) + '_' + decode_label(pred3) + '.png', gen_img_deprocessed)
+        # # save the result to disk
+        # imwrite(os.path.join(gen_input_path, 'already_differ_' + decode_label(pred1) + '_' + decode_label(
+        #     pred2) + '_' + decode_label(pred3) + '.png'), gen_img_deprocessed)
         continue
 
     print('{}-th seed start gradient ascent'.format(n + 1))
@@ -188,7 +190,7 @@ for n in range(args.seeds):
         sureness3 = np.max(predict3[0])
 
         if not predictions1 == predictions2 == predictions3:
-            gen_time = time.process_time() - start_time
+            gen_time = time.perf_counter() - start_time
             update_coverage(gen_img, model1, model_layer_dict1, args.threshold, args.k)
             update_coverage(gen_img, model2, model_layer_dict2, args.threshold, args.k)
             update_coverage(gen_img, model3, model_layer_dict3, args.threshold, args.k)
@@ -206,27 +208,30 @@ for n in range(args.seeds):
 
             l2_distance = np.linalg.norm(orig_img_deprocessed - gen_img_deprocessed)
             result_list.append((decode_label(predict1), decode_label(predict2), decode_label(predict3), 
-                                sureness1, sureness2, sureness3, iters, l2_distance, gen_time))
+                                sureness1, sureness2, sureness3, iters, averaged_nc, l2_distance, gen_time))
             print('L2 distance to original image %d' % l2_distance)
             # save the result to disk
-            imwrite('./generated_inputs/' + args.transformation + '_' + decode_label(predict1) + '_' + decode_label(
-                predict2) + '_' + decode_label(predict3) + '.png',
+            imwrite(os.path.join(gen_input_path, args.transformation + '_' + decode_label(predict1) + '_' + decode_label(
+                predict2) + '_' + decode_label(predict3) + '.png'),
                    gen_img_deprocessed)
-            imwrite('./generated_inputs/' + args.transformation + '_' + decode_label(predict1) + '_' + decode_label(
-                predict2) + '_' + decode_label(predict3) + '_orig.png',
+            imwrite(os.path.join(gen_input_path, args.transformation + '_' + decode_label(predict1) + '_' + decode_label(
+                predict2) + '_' + decode_label(predict3) + '_orig.png'),
                    orig_img_deprocessed)
             break
         if iters == args.grad_iterations - 1:
+            gen_time = time.perf_counter() - start_time
+            result_list.append((decode_label(predict1), decode_label(predict2), decode_label(predict3), 
+                                sureness1, sureness2, sureness3, iters, 0, 0, gen_time))
             print('Failed generating image with different output')
 
 hash = hex(abs(hash(frozenset(vars(args).items()))))[2:10]
 if args.param is None:
     args.param = 'basic'
 
-with open("./results/summary_" + args.param + "_" + args.transformation + "_" + hash + ".csv", 'w') as summary_file:
-    summary_file.write("Prediction 1,Prediction 2,Prediction 3,Sureness 1,Sureness 2,Sureness 3,Iter Num,L2 Distance,Generation Time\n")
+with open(os.path.join(result_path, 'summary_' + args.param + "_" + args.transformation + "_" + hash + ".csv"), 'w') as summary_file:
+    summary_file.write("Prediction 1,Prediction 2,Prediction 3,Sureness 1,Sureness 2,Sureness 3,Iter Num,Averaged NC,L2 Distance,Generation Time\n")
     for item in result_list:
-        summary_file.write(f"{item[0]},{item[1]},{item[2]},{item[3]},{item[4]},{item[5]},{item[6]},{item[7]},{item[8]}\n")
+        summary_file.write(f"{item[0]},{item[1]},{item[2]},{item[3]},{item[4]},{item[5]},{item[6]},{item[7]},{item[8]},{item[9]}\n")
 
-with open("./results/config_" + args.param + "_" + args.transformation + "_" + hash + ".json", 'w') as config_file:
+with open(os.path.join(result_path, "config_" + args.param + "_" + args.transformation + "_" + hash + ".json"), 'w') as config_file:
     dump(vars(args), config_file)
