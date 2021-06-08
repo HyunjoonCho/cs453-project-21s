@@ -203,10 +203,10 @@ for _ in range(args.seeds):
 
 hash = hex(abs(hash(frozenset(vars(args).items()))))[2:10]
 
-with open("./summary_" + args.param + "_" + args.transformation + "_" + hash + ".csv", 'w') as summary_file:
+with open("./summary_" + str(args.param) + "_" + args.transformation + "_" + hash + ".csv", 'w') as summary_file:
     summary_file.write("Prediction 1,Prediction 2,Prediction 3,Sureness 1,Sureness 2,Sureness 3,Iter Num,L2 Distance\n")
     for item in result_list:
         summary_file.write(f"{item[0]},{item[1]},{item[2]},{item[3]},{item[4]},{item[5]},{item[6]},{item[7]}\n")
 
-with open("./config_" + args.param + "_" + args.transformation + "_" + hash + ".json", 'w') as config_file:
+with open("./config_" + str(args.param) + "_" + args.transformation + "_" + hash + ".json", 'w') as config_file:
     dump(vars(args), config_file)
