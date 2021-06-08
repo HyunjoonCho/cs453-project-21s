@@ -141,7 +141,6 @@ def update_coverage(input_data, model, model_layer_dict, threshold=0, k=5):
             for i in range(k):
                 if min_thres + section_length * i <= curr_neuron <= min_thres + section_length * (i + 1):
                     model_layer_dict[(layer_names[i], num_neuron, k)] = True
-            break
             
 
 
