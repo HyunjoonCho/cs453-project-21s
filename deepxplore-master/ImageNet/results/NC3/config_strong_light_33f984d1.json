@@ -1,0 +1,1 @@
+{"cov_type": "strong", "transformation": "light", "weight_diff": 1.0, "weight_nc": 0.1, "step": 10.0, "seeds": 100, "grad_iterations": 20, "threshold": 0.2, "k_section": null, "target_model": 0, "start_point": [0, 0], "occlusion_size": [50, 50], "average time": 35.699415326032245}
