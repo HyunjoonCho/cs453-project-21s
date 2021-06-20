@@ -6,8 +6,4 @@ Apply existing technique on various neuron coverage
 * [Project Proposal (April 14)](./docs/2021S-CS453-Team8-project-proposal.pdf)  
 * [Milestone Day (May 12)](./docs/2021S-CS453-Team8-milestone.pdf)  
 * [Final Presentation (June 9)](./docs/2021S-CS453-Team8-final-presentation.pdf)  
-
-## Future Works
-- Implement boundary coverage  
-- Redefine neuron loss to cover lower boundary  
-- Modularization  
+* [Final Report (June 20)](./docs/2021S-CS453-Team8-final-report.pdf)
